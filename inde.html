@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>iPhone Quoted Generator</title>
+  <style>
+    :root{
+      --bg:#f2f2f5; --card:#fff; --blue:#0a84ff; --gray:#8e8e93; --bubble:#e5e5ea;
+    }
+    *{box-sizing:border-box}
+    body{font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); padding:28px; color:#111}
+    .wrap{max-width:420px;margin:0 auto}
+
+    /* mock iPhone frame */
+    .iphone{background:linear-gradient(#0000,#0000),var(--card); border-radius:28px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,0.15); border:1px solid rgba(0,0,0,0.06)}
+    .screen{background:linear-gradient(#f6f6f7,#f2f2f5); border-radius:18px; padding:12px; min-height:640px; position:relative; overflow:hidden}
+
+    /* top status */
+    .status{display:flex;justify-content:center; gap:8px; color:var(--gray); font-size:12px; padding:6px 0}
+    .status .notch{width:140px;height:28px;border-radius:14px;background:rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:center}
+
+    /* messages area */
+    .messages{padding:14px; display:flex;flex-direction:column; gap:10px}
+    .bubble{max-width:78%; padding:12px 14px; border-radius:18px; line-height:1.35; position:relative}
+    .from-me{align-self:flex-end; background:var(--blue); color:white; border-bottom-right-radius:6px}
+    .from-them{align-self:flex-start; background:var(--bubble); color:#111; border-bottom-left-radius:6px}
+    .meta{font-size:11px;color:var(--gray); margin-top:6px}
+    .quote{border-left:3px solid rgba(0,0,0,0.08); padding-left:10px; margin-top:6px; color:#444; font-size:13px}
+
+    /* controls */
+    form.controls{display:grid; gap:8px; margin:14px 0}
+    input[type=text], textarea, select{padding:10px;border-radius:8px;border:1px solid #ddd;font-size:14px}
+    textarea{min-height:68px; resize:vertical}
+    .row{display:flex; gap:8px}
+    button{padding:10px 12px;border-radius:10px;border:0;background:#111;color:#fff; cursor:pointer}
+    .secondary{background:#eee;color:#111;border:1px solid #ddd}
+
+    /* preview wrapper */
+    .preview-wrap{display:flex;flex-direction:column;gap:8px}
+
+    /* footer */
+    .footer{font-size:12px;color:var(--gray); text-align:center; margin-top:10px}
+
+    /* small helpers */
+    label{font-size:13px;color:#333}
+    .inline{display:flex;gap:8px;align-items:center}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>iPhone Quoted Generator</h2>
+    <p>Buat kartu kutipan bergaya iMessage — isi teks, pengirim, warna & unduh PNG.</p>
+
+    <div class="controls-area">
+      <form id="form" class="controls" onsubmit="return false">
+        <div class="row">
+          <div style="flex:1"><label>Nama pengirim</label><input id="sender" type="text" value="Alex"/></div>
+          <div style="width:110px"><label>Waktu</label><input id="time" type="text" value="10:42"/></div>
+        </div>
+        <label>Pesan utama</label>
+        <textarea id="message">Ini adalah contoh kutipan. Edit sesuai keinginanmu.</textarea>
+        <label>Kutipan (teks yang di-quote)</label>
+        <input id="quote" type="text" value="Kutipan pendek — bisa dua baris."/>
+        <div class="row">
+          <div style="flex:1"><label>Mode</label>
+            <select id="mode"><option value="light">Light</option><option value="dark">Dark</option></select>
+          </div>
+          <div style="width:160px"><label>Bubble</label>
+            <select id="bubbleType"><option value="them">Left (grey)</option><option value="me">Right (blue)</option></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="renderBtn" type="button">Render Preview</button>
+          <button id="downloadBtn" class="secondary" type="button">Download PNG</button>
+        </div>
+      </form>
+    </div>
+
+    <div style="height:18px"></div>
+
+    <div class="preview-wrap">
+      <div class="iphone" id="iphone">
+        <div class="screen" id="screen">
+          <div class="status"><div style="flex:1"></div><div class="notch">Carrier · 100%</div><div style="flex:1"></div></div>
+          <div id="messages" class="messages">
+            <!-- messages inserted here -->
+          </div>
+          <!-- fake input bar -->
+          <div style="position:absolute;left:12px;right:12px;bottom:12px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <div style="flex:1;background:#fff;border-radius:20px;padding:8px 12px;border:1px solid #e6e6e6;color:#777">iMessage input preview</div>
+              <div style="width:52px;height:36px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff">Send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">Tip: klik "Download PNG" untuk menyimpan hasil (dibuat dari SVG).</div>
+    </div>
+  </div>
+
+  <script>
+    // Utilities to build preview and export as PNG using SVG -> canvas pipeline
+    const senderEl = document.getElementById('sender');
+    const timeEl = document.getElementById('time');
+    const messageEl = document.getElementById('message');
+    const quoteEl = document.getElementById('quote');
+    const modeEl = document.getElementById('mode');
+    const bubbleTypeEl = document.getElementById('bubbleType');
+    const messagesWrap = document.getElementById('messages');
+    const renderBtn = document.getElementById('renderBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const screenEl = document.getElementById('screen');
+
+    function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderPreview(){
+      // apply mode
+      if(modeEl.value==='dark'){
+        document.documentElement.style.setProperty('--bg','#0f0f10');
+        document.documentElement.style.setProperty('--card','#111');
+        document.documentElement.style.setProperty('--bubble','#2b2b2e');
+        document.documentElement.style.setProperty('--gray','#9aa0a6');
+        document.documentElement.style.setProperty('--blue','#0a84ff');
+        document.body.style.color='#eef';
+      } else {
+        document.documentElement.style.setProperty('--bg','#f2f2f5');
+        document.documentElement.style.setProperty('--card','#fff');
+        document.documentElement.style.setProperty('--bubble','#e5e5ea');
+        document.documentElement.style.setProperty('--gray','#8e8e93');
+        document.documentElement.style.setProperty('--blue','#0a84ff');
+        document.body.style.color='#111';
+      }
+
+      // clear
+      messagesWrap.innerHTML='';
+
+      // quoted bubble
+      const quote = quoteEl.value.trim();
+      const msg = messageEl.value.trim();
+      const sender = senderEl.value.trim() || 'No name';
+      const time = timeEl.value.trim() || '';
+
+      // left quote (them)
+      const quoteNode = document.createElement('div');
+      quoteNode.className = 'bubble from-them';
+      quoteNode.innerHTML = '<div style="font-weight:600;margin-bottom:6px">'+escapeHtml(sender)+'</div>' +
+        '<div class="quote">'+escapeHtml(quote).replace(/\n/g,'<br/>')+'</div>' +
+        '<div class="meta">'+escapeHtml(time)+'</div>';
+      messagesWrap.appendChild(quoteNode);
+
+      // main message (position depends on bubbleType)
+      const mainNode = document.createElement('div');
+      mainNode.className = 'bubble ' + (bubbleTypeEl.value==='me' ? 'from-me' : 'from-them');
+      mainNode.innerHTML = escapeHtml(msg).replace(/\n/g,'<br/>') + '<div class="meta">'+escapeHtml(time)+'</div>';
+      messagesWrap.appendChild(mainNode);
+
+      // scroll to bottom effect
+      messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    }
+
+    renderBtn.addEventListener('click', renderPreview);
+
+    // Export current preview as PNG by rendering an SVG snapshot then drawing to canvas
+    function exportToPNG(filename='iphone-quote.png'){
+      // measure the screen element
+      const rect = screenEl.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+
+      // Create an SVG that embeds the HTML using foreignObject
+      const serializer = new XMLSerializer();
+      // clone the screen to isolate styles
+      const screenClone = screenEl.cloneNode(true);
+
+      // Inline computed styles for fonts/backgrounds (basic approach)
+      // We'll embed a small style block for the CSS used in this file that affects the .screen
+      const styles = `
+        @font-face{font-family:-apple-system;}
+        body{font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+        .screen{background:linear-gradient(#f6f6f7,#f2f2f5);border-radius:18px;padding:12px}
+      `;
+
+      const outerHTML = '<div xmlns="http://www.w3.org/1999/xhtml">' + screenClone.outerHTML + '</div>';
+
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'>
+        <foreignObject width='100%' height='100%'>
+          ${outerHTML}
+        </foreignObject>
+      </svg>`;
+
+      const svgBlob = new Blob([svg], {type: 'image/svg+xml;charset=utf-8'});
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = function(){
+        const canvas = document.createElement('canvas');
+        canvas.width = width * devicePixelRatio;
+        canvas.height = height * devicePixelRatio;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        // fill background white for safety
+        ctx.fillStyle = window.getComputedStyle(document.body).backgroundColor || '#fff';
+        ctx.fillRect(0,0,width,height);
+        ctx.drawImage(img,0,0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(function(blob){
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }, 'image/png');
+      };
+      img.onerror = function(e){
+        alert('Gagal membuat gambar — browser mungkin memblokir SVG foreignObject. Coba di Chrome/Edge.');
+      }
+      img.src = url;
+    }
+
+    downloadBtn.addEventListener('click', ()=>{
+      renderPreview();
+      exportToPNG('iphone-quote.png');
+    });
+
+    // initial render
+    renderPreview();
+  </script>
+</body>
+</html>
